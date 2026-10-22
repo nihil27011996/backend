@@ -6,6 +6,7 @@ import sendEmail from "../../config/notification-config.js";
 import { securityConfig } from "../../config/security.js";
 import {
   startTestDatabase,
+  clearTestDatabase,
   stopTestDatabase,
 } from "../helpers/database.js";
 
@@ -25,7 +26,12 @@ let incomeCategoryId;
 let transactionData1Id;
 let transactionData2Id;
 
-beforeEach(() => {
+beforeAll(async () => {
+  await startTestDatabase();
+});
+
+beforeEach(async () => {
+  await clearTestDatabase();
   // Keep the real limiters active, with a fresh allowance for each scenario.
   for (const ip of ["127.0.0.1", "::ffff:127.0.0.1", "::1"]) {
     securityConfig.authLimiter.resetKey(ip);
@@ -34,23 +40,29 @@ beforeEach(() => {
 
   sendEmail.mockReset();
   sendEmail.mockResolvedValue(undefined);
-});
 
-beforeAll(async () => {
-  await startTestDatabase();
+  authToken = undefined;
+  transactionId = undefined;
+  categoryId = undefined;
+  incomeCategoryId = undefined;
+  transactionData1Id = undefined;
+  transactionData2Id = undefined;
+
   const userData = {
     name: "Test User",
     userName: "testuser123",
-    email: `test_${Date.now()}@example.com`,
+    email: "transaction-test@example.com",
     password: "TestPassword123!",
   };
 
-  await request(app).post("/fin-tracker/v1/auth/signup").send(userData);
+  const signup = await request(app).post("/fin-tracker/v1/auth/signup").send(userData);
+  expect(signup.statusCode).toBe(201);
 
   //making api call to set authToken
   const userResponse = await request(app)
     .post("/fin-tracker/v1/auth/login")
     .send(userData);
+  expect(userResponse.statusCode).toBe(200);
   authToken = userResponse.body.data.token;
 
   //creating the expense category data and setting the variable
@@ -65,6 +77,7 @@ beforeAll(async () => {
     .set("Authorization", `Bearer ${authToken}`)
     .send(expenseCategoryData);
 
+  expect(expenseCategoryResponse.statusCode).toBe(201);
   categoryId = expenseCategoryResponse.body.data._id;
 
   //creating the income category data and setting the variable
@@ -79,6 +92,7 @@ beforeAll(async () => {
     .set("Authorization", `Bearer ${authToken}`)
     .send(incomeCategoryData);
 
+  expect(incomeCategoryResponse.statusCode).toBe(201);
   incomeCategoryId = incomeCategoryResponse.body.data._id;
 
   //creating 2 transaction to be stored for fetch all and get test cases
@@ -94,6 +108,7 @@ beforeAll(async () => {
     .set("Authorization", `Bearer ${authToken}`)
     .send(transactionData1);
 
+  expect(transactionData1Response.statusCode).toBe(201);
   transactionData1Id = transactionData1Response.body.data._id;
 
   const transactionData2 = {
@@ -108,6 +123,7 @@ beforeAll(async () => {
     .set("Authorization", `Bearer ${authToken}`)
     .send(transactionData2);
 
+  expect(transactionData2Response.statusCode).toBe(201);
   transactionData2Id = transactionData2Response.body.data._id;
 });
 
@@ -714,7 +730,10 @@ describe("Transaction API Test Suite", () => {
         .delete(`/fin-tracker/v1/transactions/${transactionToDeleteId}`)
         .set("Authorization", `Bearer ${authToken}`);
 
-      expect(response.statusCode).toBe(500);
+      expect(response.statusCode).toBe(204);
+      expect(response.text).toBe("");
+      const deleted = await request(app).get(`/fin-tracker/v1/transactions/${transactionToDeleteId}`).set("Authorization", `Bearer ${authToken}`);
+      expect(deleted.statusCode).toBe(404);
     });
 
     // NEGATIVE TEST CASES
@@ -731,7 +750,7 @@ describe("Transaction API Test Suite", () => {
         .delete("/fin-tracker/v1/transactions/invalid_id")
         .set("Authorization", `Bearer ${authToken}`);
 
-      expect(response.statusCode).toBe(500);
+      expect(response.statusCode).toBe(400);
     });
 
     it(" Should fail when transaction is not found", async () => {
@@ -740,7 +759,7 @@ describe("Transaction API Test Suite", () => {
         .delete(`/fin-tracker/v1/transactions/${fakeId}`)
         .set("Authorization", `Bearer ${authToken}`);
 
-      expect(response.statusCode).toBe(500);
+      expect(response.statusCode).toBe(404);
     });
 
     it(" Should fail when unauthorized", async () => {

@@ -211,11 +211,16 @@ describe(" Transaction Tests", () => {
   });
 
   it("should create a transaction successfully", async () => {
+    const category = await request(app)
+      .post("/fin-tracker/v1/categories")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ name: "Food", type: "expense" });
+    expect(category.statusCode).toBe(201);
     const transactionData = {
       type: "expense",
       amount: 50.0,
-      category: "Food",
-      description: "Lunch at restaurant",
+      categoryId: category.body.data._id,
+      note: "Lunch at restaurant",
     };
 
     const response = await request(app)
@@ -238,7 +243,7 @@ describe(" Transaction Tests", () => {
     console.log("Get transactions response:", response.body);
     expect(response.statusCode).toBe(200);
     expect(response.body).toHaveProperty("data");
-    expect(Array.isArray(response.body.data)).toBe(true);
+    expect(Array.isArray(response.body.data.transactions)).toBe(true);
   });
 });
 
@@ -295,7 +300,7 @@ describe(" Category Tests", () => {
     console.log("Get categories response:", response.body);
     expect(response.statusCode).toBe(200);
     expect(response.body).toHaveProperty("data");
-    expect(Array.isArray(response.body.data)).toBe(true);
+    expect(Array.isArray(response.body.data.categories)).toBe(true);
   });
 });
 
@@ -335,7 +340,7 @@ describe(" Budget Tests", () => {
     console.log("Get budgets response:", response.body);
     expect(response.statusCode).toBe(200);
     expect(response.body).toHaveProperty("data");
-    expect(Array.isArray(response.body.data)).toBe(true);
+    expect(Array.isArray(response.body.data.budgets)).toBe(true);
   });
 });
 
